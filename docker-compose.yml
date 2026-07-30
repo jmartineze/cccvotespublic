@@ -1,0 +1,64 @@
+version: '3.9'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cccvotes-app
+    working_dir: /var/www/html
+    volumes:
+      - ./:/var/www/html
+      - ./xdebug.ini:/usr/local/etc/php/conf.d/xdebug.ini
+      - ./uploads.ini:/usr/local/etc/php/conf.d/uploads.ini
+    ports:
+      - "9001:9000"
+    depends_on:
+      - db
+    networks:
+      - cccvotes
+
+  web:
+    image: nginx:alpine
+    container_name: cccvotes-web
+    ports:
+      - "8083:80"
+    volumes:
+      - ./:/var/www/html
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - app
+    networks:
+      - cccvotes
+
+  db:
+    image: mariadb:11.4
+    container_name: cccvotes-db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: cccvotes
+      MYSQL_USER: cccvotes
+      MYSQL_PASSWORD: cccvotes
+    volumes:
+      - cccvotes_db_data:/var/lib/mysql
+    ports:
+      - "3309:3306"
+    networks:
+      - cccvotes
+
+  composer:
+    image: composer:2
+    container_name: cccvotes-composer
+    working_dir: /var/www/html
+    volumes:
+      - ./:/var/www/html
+    command: install
+    networks:
+      - cccvotes
+
+networks:
+  cccvotes:
+
+volumes:
+  cccvotes_db_data:

@@ -1,0 +1,196 @@
+# CCC Votes
+
+Private voting dashboard for the **Culture Cuties Contest (CCC)** — a panel of judges scores art/character submissions across multiple themed contests.
+
+Built mobile-first since judges primarily use phones to browse and vote.
+
+---
+
+## Stack
+
+| Layer | Technology |
+|---|---|
+| Backend | Laravel 13 · PHP 8.3 |
+| Frontend | Blade · Tailwind CSS v4 · Alpine.js v3 |
+| Database | MySQL |
+| Build | Vite 8 |
+
+---
+
+## Features
+
+### Multi-tenant
+- A **super-admin** creates independent **tenant admins**, each running their own isolated space of contests and judges (`/super-admin/tenants`)
+- Tenants can't see or edit each other's contests, submissions, votes, or judges — enforced via `owner_id` scoping
+- Judges log in with a **username + password**, no email required; usernames are unique per tenant (two tenants can each have a judge called `alpha`)
+- Super-admins and tenant admins keep email-based login; the same `/login` form accepts either an email or a username
+
+### For Judges
+- Search submissions instantly by character name or Discord user (client-side, no reload)
+- Browse submissions in a 2-column grid with category filters
+- View all images and videos per submission in a swipeable carousel (supports 1–12 files); videos autoplay with loop when the slide is active
+- Score each submission with touch-friendly sliders defined by the contest's own criteria — live total preview
+- Add a comment explaining your vote (required on `character_scenario` contests, optional on `image` contests)
+- Mark one submission per contest as your **Honorable Mention** — shown in the results even if it didn't place in the top 3; can be changed even after the contest closes to resolve conflicts
+- See your own votes and your HM pick at a glance; leaderboard locked until contest closes
+- Change your own password from the Profile tab
+
+### For Admins
+- Create and manage multiple contests (Draft → Active → Closed)
+- Define each contest's own **scoring criteria** (name + max score) and **tiebreaker order** — locked once voting starts
+- Choose a contest type: `image` (visual-only) or `character_scenario` (adds a required scenario field to submissions and a required judge comment)
+- Search submissions by character name or Discord user with real-time filtering
+- Upload submissions with drag-and-drop support for images and videos (mp4, webm, mov)
+- Manage judges: create accounts (username + password), reset passwords, remove judges
+- View full leaderboard at any time regardless of contest status
+
+### Results & Scoring
+- Total score is the sum of the contest's own configurable criteria (no fixed max — set per contest)
+- Rankings grouped by category (Female Anime, Male Realistic, etc.)
+- **Tiebreakers**: resolved in the order the admin configured (1st criterion, 2nd, ...); if every level ties, both entries are flagged ⚡ "Committee Vote Required"
+- **Honorable Mentions**: each judge picks one submission as HM; conflicts (duplicate picks or winners marked as HM) are flagged in the results page
+
+---
+
+## Local Setup
+
+### Requirements
+- PHP 8.3+, Composer
+- Node.js 18+, npm
+- MySQL (or use Docker)
+
+### With Docker (recommended)
+```bash
+git clone https://github.com/jmartineze/cccvotes.git
+cd cccvotes
+
+docker-compose up -d
+docker-compose exec app bash
+
+composer install
+cp .env.example .env
+php artisan key:generate
+php artisan migrate --force
+php artisan db:seed --force
+php artisan storage:link
+npm install && npm run build
+```
+
+### Without Docker
+```bash
+git clone https://github.com/jmartineze/cccvotes.git
+cd cccvotes
+
+composer install
+cp .env.example .env
+# Edit .env — set DB_* credentials
+
+php artisan key:generate
+php artisan migrate --force
+php artisan db:seed --force
+php artisan storage:link
+npm install && npm run build
+php artisan serve
+```
+
+### Dev servers
+```bash
+php artisan serve   # Laravel on :8000
+npm run dev         # Vite HMR
+```
+
+---
+
+## Seed Accounts
+
+| Role | Login | Password |
+|------|-------|----------|
+| Super Admin | `admin@ccc.local` (email) | `password` |
+| Tenant Admin | `tenant1@ccc.local` (email) | `password` |
+| Judge Alpha | `alpha` (username) | `password` |
+| Judge Beta | `beta` (username) | `password` |
+| Judge Gamma | `gamma` (username) | `password` |
+
+---
+
+## Production Deployment
+
+```bash
+git clone https://github.com/jmartineze/cccvotes.git
+cd cccvotes
+
+composer install --no-dev --optimize-autoloader
+cp .env.example .env
+# Edit .env: APP_ENV=production, APP_URL, DB_* credentials
+
+php artisan key:generate
+php artisan migrate --force
+php artisan db:seed --force
+php artisan storage:link
+npm install && npm run build
+
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+```
+
+### Pulling updates
+```bash
+git pull origin main
+composer install --no-dev --optimize-autoloader
+php artisan migrate --force
+npm run build
+php artisan config:clear && php artisan route:clear && php artisan view:clear
+```
+
+> Back up the database before running `migrate --force` on a release that includes schema-breaking migrations (e.g. the multi-tenant upgrade drops legacy columns). Never run `php artisan db:seed --force` against an existing production database — it's for fresh installs only.
+
+---
+
+## Project Structure
+
+```
+app/Http/Controllers/
+├── Admin/
+│   ├── ContestController.php       # Contest CRUD + criteria & tiebreaker config
+│   ├── SubmissionController.php    # Upload & delete submissions
+│   └── UserController.php          # Judge management (scoped to own tenant)
+├── SuperAdmin/
+│   └── TenantController.php        # Tenant admin management
+├── Judge/
+│   └── VotingController.php        # Browse, view & submit votes
+├── AuthController.php               # Dual email/username login
+├── DashboardController.php
+├── ProfileController.php           # Password change
+└── ResultsController.php           # Leaderboard + configurable tie-breaker logic
+
+resources/views/
+├── admin/{contests,submissions,users}/
+├── superadmin/tenants/
+├── judge/voting/
+├── results/
+├── profile/
+├── partials/                        # Reusable cards & forms
+└── layouts/app.blade.php
+
+resources/css/app.css                # Full design system
+```
+
+---
+
+## Business Rules
+
+- Tenants (contests, judges, submissions, votes) are fully isolated by `owner_id`; a tenant admin can never see or edit another tenant's data. Super-admins bypass this isolation
+- One submission per Discord user per gender per contest (`contest_id + discord_user + gender` unique)
+- One vote per judge per submission
+- One username per tenant (`owner_id + username` unique) — judges never need an email
+- Admins cannot vote
+- Leaderboard hidden from judges until contest is `closed`
+- A contest's scoring criteria lock once the first vote is cast
+- Max 12 files per submission (images + videos combined, 10 MB each); thumbnail shows the first image, or the first video frame if all files are videos
+
+---
+
+## License
+
+Private project — all rights reserved.
