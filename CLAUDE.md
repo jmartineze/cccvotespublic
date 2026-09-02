@@ -72,6 +72,7 @@ app/
   Http/
     Controllers/
       AuthController.php
+      PasswordResetController.php  # Forgot-password flow via Laravel's Password broker (SMTP)
       DashboardController.php
       ProfileController.php
       ResultsController.php
@@ -100,7 +101,7 @@ resources/
   css/app.css                      # Full design system (dark theme, custom components)
   views/
     layouts/app.blade.php
-    auth/login.blade.php
+    auth/{login,forgot-password,reset-password}.blade.php
     dashboard.blade.php
     admin/contests/{index,create,edit}.blade.php
     admin/submissions/{index,create}.blade.php

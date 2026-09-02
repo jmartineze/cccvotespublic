@@ -194,7 +194,7 @@
                 </template>
             </div>
             <p class="text-xs mt-2" style="color: var(--color-muted);" x-show="previews.length > 0">
-                <span x-text="previews.length"></span> archivo(s) nuevo(s) a agregar
+                <span x-text="previews.length"></span> New file(s) to add
             </p>
         </div>
         @endif

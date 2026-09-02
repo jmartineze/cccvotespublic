@@ -24,6 +24,7 @@ Built mobile-first since judges primarily use phones to browse and vote.
 - Tenants can't see or edit each other's contests, submissions, votes, or judges — enforced via `owner_id` scoping
 - Judges log in with a **username + password**, no email required; usernames are unique per tenant (two tenants can each have a judge called `alpha`)
 - Super-admins and tenant admins keep email-based login; the same `/login` form accepts either an email or a username
+- **Forgot password?** on the login screen emails a time-limited reset link (60 min) via the configured SMTP account to any user who has an email on file; judges without an email ask their tenant admin for a manual reset
 
 ### For Judges
 - Search submissions instantly by character name or Discord user (client-side, no reload)
@@ -122,6 +123,9 @@ cd cccvotes
 composer install --no-dev --optimize-autoloader
 cp .env.example .env
 # Edit .env: APP_ENV=production, APP_URL, DB_* credentials
+# For password-reset emails, set MAIL_MAILER=smtp and MAIL_HOST / MAIL_PORT /
+# MAIL_USERNAME / MAIL_PASSWORD / MAIL_ENCRYPTION / MAIL_FROM_ADDRESS for your SMTP account.
+# APP_URL must be the real public URL — the reset link in the email is built from it.
 
 php artisan key:generate
 php artisan migrate --force

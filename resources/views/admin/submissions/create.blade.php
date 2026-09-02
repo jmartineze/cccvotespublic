@@ -120,7 +120,7 @@
         <div>
             <label class="section-label block mb-1.5">
                 Images / Videos <span style="color: #ff2d78;">*</span>
-                <span class="ml-2 font-mono text-xs" style="color: var(--color-muted);">1–12 archivos, max 10MB c/u</span>
+                <span class="ml-2 font-mono text-xs" style="color: var(--color-muted);">1–12 files, max 10MB c/u</span>
             </label>
 
             {{-- Drop zone --}}

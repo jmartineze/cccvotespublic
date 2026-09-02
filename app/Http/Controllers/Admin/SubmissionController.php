@@ -19,7 +19,9 @@ class SubmissionController extends Controller
     public function index(Request $request): View
     {
         $contests = Contest::all();
-        $query = Submission::with(['contest', 'images'])->latest();
+        // Contest carries the TenantScope global scope, so whereHas('contest')
+        // limits submissions to the current tenant's contests (super_admin sees all).
+        $query = Submission::whereHas('contest')->with(['contest', 'images'])->latest();
 
         if ($request->filled('contest_id')) {
             $query->where('contest_id', $request->contest_id);
@@ -68,6 +70,8 @@ class SubmissionController extends Controller
 
     public function edit(Submission $submission): View
     {
+        $this->authorizeTenant($submission);
+
         $contests = Contest::orderBy('name')->get();
         $submission->load('images');
 
@@ -76,6 +80,8 @@ class SubmissionController extends Controller
 
     public function update(UpdateSubmissionRequest $request, Submission $submission): RedirectResponse
     {
+        $this->authorizeTenant($submission);
+
         DB::transaction(function () use ($request, $submission) {
             $data = $request->safe()->except('images');
             $data['backstory'] = mb_substr($data['backstory'], 0, 1000);
@@ -116,6 +122,8 @@ class SubmissionController extends Controller
 
     public function destroy(Submission $submission): RedirectResponse
     {
+        $this->authorizeTenant($submission);
+
         foreach ($submission->images as $image) {
             Storage::disk('public')->delete($image->image_path);
         }
@@ -124,5 +132,14 @@ class SubmissionController extends Controller
 
         return redirect()->route('admin.submissions.index')
             ->with('success', 'Submission deleted.');
+    }
+
+    /**
+     * Ensure the submission belongs to a contest visible to the current tenant.
+     * Contest carries the TenantScope, so a hidden contest means another tenant owns it.
+     */
+    private function authorizeTenant(Submission $submission): void
+    {
+        abort_unless($submission->contest()->exists(), 404);
     }
 }

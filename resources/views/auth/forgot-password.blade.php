@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#070711">
-    <title>Login — CCC Votes</title>
+    <title>Reset Password — CCC Votes</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
@@ -19,8 +19,8 @@
                     <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
                 </svg>
             </div>
-            <h1 class="font-display text-2xl font-800 text-white">CCC Votes</h1>
-            <p class="text-sm mt-1" style="color: var(--color-muted);">Culture Cuties Contest · Judge Panel</p>
+            <h1 class="font-display text-2xl font-800 text-white">Forgot your password?</h1>
+            <p class="text-sm mt-1" style="color: var(--color-muted);">Enter your email and we'll send you a reset link</p>
         </div>
 
         {{-- Form --}}
@@ -43,40 +43,23 @@
                 </div>
             @endif
 
-            <form method="POST" action="{{ route('login') }}" class="space-y-4">
+            <form method="POST" action="{{ route('password.email') }}" class="space-y-4">
                 @csrf
                 <div>
-                    <label class="section-label block mb-1.5">Email or Username</label>
+                    <label class="section-label block mb-1.5">Email</label>
                     <input
-                        type="text"
-                        name="identifier"
-                        value="{{ old('identifier') }}"
-                        class="input {{ $errors->has('identifier') ? 'input-error' : '' }}"
-                        placeholder="you@example.com or username"
-                        autocomplete="username"
+                        type="email"
+                        name="email"
+                        value="{{ old('email') }}"
+                        class="input {{ $errors->has('email') ? 'input-error' : '' }}"
+                        placeholder="you@example.com"
+                        autocomplete="email"
                         required
+                        autofocus
                     >
-                </div>
-                <div>
-                    <label class="section-label block mb-1.5">Password</label>
-                    <input
-                        type="password"
-                        name="password"
-                        class="input"
-                        placeholder="••••••••"
-                        autocomplete="current-password"
-                        required
-                    >
-                </div>
-                <div class="flex items-center justify-between gap-2">
-                    <div class="flex items-center gap-2">
-                        <input type="checkbox" name="remember" id="remember" class="w-4 h-4 rounded accent-pink-500">
-                        <label for="remember" class="text-sm" style="color: var(--color-muted);">Keep me logged in</label>
-                    </div>
-                    <a href="{{ route('password.request') }}" class="text-sm" style="color: var(--color-accent, #ff2d78);">Forgot password?</a>
                 </div>
                 <button type="submit" class="btn btn-primary btn-full btn-lg" style="margin-top: 0.5rem;">
-                    Enter Judge Panel
+                    Send reset link
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
                     </svg>
@@ -84,8 +67,8 @@
             </form>
         </div>
 
-        <p class="text-center text-xs mt-6" style="color: var(--color-muted);">
-            Private judging system · Contact admin for access
+        <p class="text-center text-sm mt-6">
+            <a href="{{ route('login') }}" style="color: var(--color-muted);">&larr; Back to sign in</a>
         </p>
     </div>
 </body>
