@@ -42,18 +42,13 @@ class Submission extends Model
         return $this->votes()->sum('total_score');
     }
 
-    public function totalScoreForCriterion(int $criterionId): int
-    {
-        return VoteScore::whereIn('vote_id', $this->votes()->pluck('id'))
-            ->where('contest_criterion_id', $criterionId)
-            ->sum('score');
-    }
-
     public function getPrimaryImageUrlAttribute(): ?string
     {
-        $image = $this->images()->first();
+        $image = $this->relationLoaded('images')
+            ? $this->images->first()
+            : $this->images()->first();
 
-        return $image ? asset('storage/'.$image->image_path) : null;
+        return $image?->url;
     }
 
     /**

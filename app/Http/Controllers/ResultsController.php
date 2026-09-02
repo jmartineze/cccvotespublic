@@ -6,6 +6,7 @@ use App\Models\Contest;
 use App\Models\HonorableMention;
 use App\Models\Submission;
 use App\Models\Vote;
+use App\Models\VoteScore;
 use Illuminate\Support\Collection;
 use Illuminate\View\View;
 
@@ -20,7 +21,7 @@ class ResultsController extends Controller
             $query->where('status', '!=', 'draft');
         }
 
-        $contests = $query->get();
+        $contests = $query->paginate(15);
 
         return view('results.index', compact('contests'));
     }
@@ -97,6 +98,10 @@ class ResultsController extends Controller
     {
         $tiebreakCriteria = $contest->criteria()->tiebreakOrdered()->get();
 
+        // Pre-aggregate every per-criterion score in one query instead of two
+        // queries per submission per tiebreak level inside resolveTie().
+        $tiebreakScores = $this->tiebreakScoreMap($contest, $tiebreakCriteria);
+
         $grouped = $submissions->groupBy('category');
         $categories = [];
 
@@ -105,7 +110,7 @@ class ResultsController extends Controller
                 ->sortByDesc('votes_sum_total_score')
                 ->values();
 
-            $ranked = $this->applyTieBreakers($ranked, $tiebreakCriteria);
+            $ranked = $this->applyTieBreakers($ranked, $tiebreakCriteria, $tiebreakScores);
 
             $categories[$categoryName] = $ranked;
         }
@@ -115,7 +120,30 @@ class ResultsController extends Controller
         return $categories;
     }
 
-    private function applyTieBreakers(Collection $submissions, Collection $tiebreakCriteria): Collection
+    /**
+     * [submission_id => [criterion_id => summed score]] for the tiebreak criteria.
+     */
+    private function tiebreakScoreMap(Contest $contest, Collection $tiebreakCriteria): Collection
+    {
+        if ($tiebreakCriteria->isEmpty()) {
+            return collect();
+        }
+
+        return VoteScore::query()
+            ->join('votes', 'votes.id', '=', 'vote_scores.vote_id')
+            ->join('submissions', 'submissions.id', '=', 'votes.submission_id')
+            ->where('submissions.contest_id', $contest->id)
+            ->whereIn('vote_scores.contest_criterion_id', $tiebreakCriteria->pluck('id'))
+            ->groupBy('votes.submission_id', 'vote_scores.contest_criterion_id')
+            ->selectRaw('votes.submission_id, vote_scores.contest_criterion_id, SUM(vote_scores.score) as total')
+            ->get()
+            ->groupBy('submission_id')
+            ->map(fn ($rows) => $rows->mapWithKeys(fn ($r) => [
+                (int) $r->contest_criterion_id => (int) $r->total,
+            ]));
+    }
+
+    private function applyTieBreakers(Collection $submissions, Collection $tiebreakCriteria, Collection $tiebreakScores): Collection
     {
         $result = collect();
         $i = 0;
@@ -132,7 +160,7 @@ class ResultsController extends Controller
             }
 
             if ($group->count() > 1) {
-                foreach ($this->resolveTie($group, $tiebreakCriteria) as $s) {
+                foreach ($this->resolveTie($group, $tiebreakCriteria, $tiebreakScores) as $s) {
                     $result->push($s);
                 }
             } else {
@@ -150,7 +178,7 @@ class ResultsController extends Controller
      * criteria. Falls back to marking the group as a Committee Vote once the
      * levels are exhausted (or none were configured).
      */
-    private function resolveTie(Collection $group, Collection $tiebreakCriteria): Collection
+    private function resolveTie(Collection $group, Collection $tiebreakCriteria, Collection $tiebreakScores): Collection
     {
         if ($tiebreakCriteria->isEmpty()) {
             return $group->map(function ($s) {
@@ -164,8 +192,8 @@ class ResultsController extends Controller
         $remaining = $tiebreakCriteria->slice(1)->values();
         $key = "tiebreak_score_{$criterion->id}";
 
-        $scored = $group->map(function ($s) use ($criterion, $key) {
-            $s->{$key} = $s->totalScoreForCriterion($criterion->id);
+        $scored = $group->map(function ($s) use ($criterion, $key, $tiebreakScores) {
+            $s->{$key} = (int) ($tiebreakScores[$s->id][$criterion->id] ?? 0);
 
             return $s;
         });
@@ -175,7 +203,7 @@ class ResultsController extends Controller
         $losers = $scored->filter(fn ($s) => $s->{$key} < $maxScore)->sortByDesc($key)->values();
 
         $resolvedWinners = $winners->count() > 1
-            ? $this->resolveTie($winners, $remaining)
+            ? $this->resolveTie($winners, $remaining, $tiebreakScores)
             : $winners;
 
         return $resolvedWinners->concat($losers);

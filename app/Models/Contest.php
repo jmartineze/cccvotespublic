@@ -12,6 +12,9 @@ class Contest extends Model
 
     protected $fillable = ['owner_id', 'name', 'description', 'cover_image', 'status', 'contest_type'];
 
+    /** Per-instance memo for hasVotes() — several requests call it 2-3× per contest. */
+    protected ?bool $hasVotesCache = null;
+
     public function submissions(): HasMany
     {
         return $this->hasMany(Submission::class);
@@ -39,12 +42,14 @@ class Contest extends Model
 
     public function hasVotes(): bool
     {
-        return Vote::whereHas('submission', fn ($q) => $q->where('contest_id', $this->id))->exists();
+        return $this->hasVotesCache ??= Vote::whereHas(
+            'submission', fn ($q) => $q->where('contest_id', $this->id)
+        )->exists();
     }
 
     public function getCoverImageUrlAttribute(): ?string
     {
-        return $this->cover_image ? asset('storage/'.$this->cover_image) : null;
+        return $this->cover_image ? route('media.contest-cover', $this) : null;
     }
 
     public function getStatusBadgeAttribute(): array

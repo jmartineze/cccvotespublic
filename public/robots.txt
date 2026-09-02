@@ -1,2 +1,3 @@
+# Private judging system — nothing here is meant to be crawled or indexed.
 User-agent: *
-Disallow:
+Disallow: /

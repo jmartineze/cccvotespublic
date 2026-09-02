@@ -7,7 +7,7 @@
     $images = $submission->images;
     $videoIndices = $images->filter(fn($img) => $img->isVideo())->keys()->values()->toArray();
 @endphp
-<div class="max-w-2xl mx-auto" x-data="votingPanel({{ json_encode($videoIndices) }})">
+<div class="max-w-2xl mx-auto" x-data="votingPanel(@js($videoIndices))">
 
     {{-- Back nav --}}
     <div class="px-4 pt-4 pb-2">
@@ -306,9 +306,9 @@ function votingPanel(videoIndices) {
         current: 0,
         touchStartX: 0,
         videoIndices: videoIndices || [],
-        scores: {{ json_encode($criteria->mapWithKeys(fn ($c) => [
-            (string) $c->id => old("scores.{$c->id}", $myVoteScores[$c->id] ?? intdiv($c->max_score, 2)),
-        ])) }},
+        scores: {!! json_encode($criteria->mapWithKeys(fn ($c) => [
+            (string) $c->id => (int) old("scores.{$c->id}", $myVoteScores[$c->id] ?? intdiv($c->max_score, 2)),
+        ])) !!},
         get total() {
             return Object.values(this.scores).reduce((sum, v) => sum + Number(v), 0);
         },

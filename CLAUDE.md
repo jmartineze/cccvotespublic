@@ -54,11 +54,22 @@ HonorableMention → belongs to User + Submission + Contest
 ### Blind Voting Rule
 Results page is **locked** while a contest is `active` for judges — they see only their own votes. Full leaderboard unlocks when contest status changes to `closed`. Admins always see full results.
 
+### Voting access rules (VotingController)
+- Judges may only act on contests owned by their tenant — `Contest` route binding carries `TenantScope`, so a foreign contest 404s. `$submission->contest_id` is checked against the bound contest.
+- `vote()` requires `status === 'active'`. `index()` / `show()` / `honorableMention()` reject `draft` (404); HM stays editable on `closed`.
+- `Vote.user_id` is always `auth()->id()` — never taken from the request.
+
+### Abuse protection
+- `POST /login`: 5 failed attempts per `identifier+IP` → cooldown (`AuthController`), plus `throttle:20,1`.
+- `password.email` / `password.update`: `throttle:6,1`. `judge.voting.vote` / `.hm`: `throttle:60,1`.
+- `robots.txt` is `Disallow: /`; all views send `noindex, nofollow`.
+
 ### Media Files
 - Submissions support up to 12 files (images **and** videos: jpg, png, gif, webp, mp4, webm, mov)
 - Max 10 MB per file; nginx `client_max_body_size` and PHP `post_max_size` are both set to 120 MB to cover the full multi-file request
 - `SubmissionImage` stores all media types; use `$image->isVideo()` to distinguish them
 - Thumbnails: `Submission::thumbnailImage()` returns the first non-video image; fallback is a `<video preload="metadata">` showing the first frame
+- **Files are served through auth-gated routes, not `/storage` links.** `$image->url` → `media.submission-image`, `$contest->cover_image_url` → `media.contest-cover` (both `MediaController`, `auth` middleware). Submission media checks the contest is visible under `TenantScope` and hides `draft` contests from judges. Files still live on the `public` disk; production should drop the `public/storage` symlink or `deny` `/storage/` in nginx so the gate can't be bypassed.
 
 ### Unique Constraints
 - `submissions`: `['contest_id', 'discord_user', 'gender']` — one entry per gender per contest per Discord user
@@ -165,7 +176,7 @@ docker-compose exec app bash  # Shell into PHP container
 - **Fonts**: Syne (headings) · Outfit (body) · Space Mono (scores/numbers)
 - **Components**: `.card`, `.card-glass`, `.btn`, `.badge`, `.input`, `.submission-card`, `.leaderboard-row` — all defined in `resources/css/app.css`
 - **Navigation**: Fixed bottom nav bar (mobile-first), sticky top bar
-- **Image uploads**: stored in `storage/app/public/submissions/`, served via `public/storage` symlink
+- **Image uploads**: stored in `storage/app/public/submissions/`, streamed by `MediaController` behind `auth` (no public `/storage` links)
 
 ## Deployment (Production)
 

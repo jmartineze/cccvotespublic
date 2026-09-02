@@ -50,6 +50,14 @@ class TenantController extends Controller
     {
         abort_if($tenant->role !== 'tenant_admin', 403);
 
+        $hasContests = $tenant->contests()->withoutGlobalScopes()->exists();
+        $hasJudges = User::where('owner_id', $tenant->id)->exists();
+
+        if ($hasContests || $hasJudges) {
+            return redirect()->route('super-admin.tenants.index')
+                ->with('error', "Cannot remove \"{$tenant->name}\" while they still own contests or judges. Delete those first.");
+        }
+
         $tenant->delete();
 
         return redirect()->route('super-admin.tenants.index')

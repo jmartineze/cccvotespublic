@@ -41,5 +41,9 @@
             <p class="font-display font-600">No results available yet</p>
         </div>
     @endforelse
+
+    @if($contests->hasPages())
+        <div class="mt-4">{{ $contests->links() }}</div>
+    @endif
 </div>
 @endsection

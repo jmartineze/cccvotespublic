@@ -18,6 +18,7 @@ class VotingController extends Controller
     public function index(Contest $contest): View
     {
         abort_if(auth()->user()->isAnyAdmin(), 403, 'Admins cannot participate in voting.');
+        abort_if($contest->status === 'draft', 404);
 
         $myHm = (int) HonorableMention::where('user_id', auth()->id())
             ->where('contest_id', $contest->id)
@@ -46,6 +47,7 @@ class VotingController extends Controller
     public function show(Contest $contest, Submission $submission): View
     {
         abort_if(auth()->user()->isAnyAdmin(), 403, 'Admins cannot participate in voting.');
+        abort_if($contest->status === 'draft', 404);
         abort_if($submission->contest_id !== $contest->id, 404);
 
         $submission->load('images');
@@ -70,7 +72,7 @@ class VotingController extends Controller
     {
         abort_if(auth()->user()->isAnyAdmin(), 403, 'Admins cannot participate in voting.');
         abort_if($submission->contest_id !== $contest->id, 404);
-        abort_if($contest->isClosed(), 403, 'This contest is closed for voting.');
+        abort_unless($contest->isActive(), 403, 'Voting is not open for this contest.');
 
         DB::transaction(function () use ($request, $submission) {
             $vote = Vote::updateOrCreate(
@@ -97,6 +99,8 @@ class VotingController extends Controller
     {
         abort_if(auth()->user()->isAnyAdmin(), 403, 'Admins cannot participate in voting.');
         abort_if($submission->contest_id !== $contest->id, 404);
+        // HM stays editable on closed contests (conflict resolution) but never on drafts.
+        abort_if($contest->status === 'draft', 404);
 
         $existing = HonorableMention::where('user_id', auth()->id())
             ->where('contest_id', $contest->id)

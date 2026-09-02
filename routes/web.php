@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Judge\VotingController;
+use App\Http\Controllers\MediaController;
 use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ResultsController;
@@ -16,15 +17,15 @@ use Illuminate\Support\Facades\Route;
 
 // Auth
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login')->middleware('guest');
-Route::post('/login', [AuthController::class, 'login'])->middleware('guest');
+Route::post('/login', [AuthController::class, 'login'])->middleware(['guest', 'throttle:20,1']);
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout')->middleware('auth');
 
 // Password reset (email link → new password)
 Route::middleware('guest')->group(function () {
     Route::get('/forgot-password', [PasswordResetController::class, 'showLinkRequestForm'])->name('password.request');
-    Route::post('/forgot-password', [PasswordResetController::class, 'sendResetLink'])->name('password.email');
+    Route::post('/forgot-password', [PasswordResetController::class, 'sendResetLink'])->name('password.email')->middleware('throttle:6,1');
     Route::get('/reset-password/{token}', [PasswordResetController::class, 'showResetForm'])->name('password.reset');
-    Route::post('/reset-password', [PasswordResetController::class, 'resetPassword'])->name('password.update');
+    Route::post('/reset-password', [PasswordResetController::class, 'resetPassword'])->name('password.update')->middleware('throttle:6,1');
 });
 
 // Authenticated routes
@@ -33,6 +34,10 @@ Route::middleware('auth')->group(function () {
     // Dashboard
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
+    // Gated media (no direct /storage links — tenant scope enforced)
+    Route::get('/media/submission-image/{image}', [MediaController::class, 'submissionImage'])->name('media.submission-image');
+    Route::get('/media/contest-cover/{contest}', [MediaController::class, 'contestCover'])->name('media.contest-cover');
+
     // Profile (judges only — admins don't need this)
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::post('/profile/password', [ProfileController::class, 'updatePassword'])->name('profile.password');
@@ -40,8 +45,8 @@ Route::middleware('auth')->group(function () {
     // Judge: Voting (admin is blocked inside controller)
     Route::get('/contests/{contest}/vote', [VotingController::class, 'index'])->name('judge.voting.index');
     Route::get('/contests/{contest}/vote/{submission}', [VotingController::class, 'show'])->name('judge.voting.show');
-    Route::post('/contests/{contest}/vote/{submission}', [VotingController::class, 'vote'])->name('judge.voting.vote');
-    Route::post('/contests/{contest}/honorable-mention/{submission}', [VotingController::class, 'honorableMention'])->name('judge.voting.hm');
+    Route::post('/contests/{contest}/vote/{submission}', [VotingController::class, 'vote'])->name('judge.voting.vote')->middleware('throttle:60,1');
+    Route::post('/contests/{contest}/honorable-mention/{submission}', [VotingController::class, 'honorableMention'])->name('judge.voting.hm')->middleware('throttle:60,1');
 
     // Results
     Route::get('/results', [ResultsController::class, 'index'])->name('results.index');

@@ -16,7 +16,7 @@ class SubmissionImage extends Model
 
     public function getUrlAttribute(): string
     {
-        return asset('storage/'.$this->image_path);
+        return route('media.submission-image', $this);
     }
 
     public function isVideo(): bool

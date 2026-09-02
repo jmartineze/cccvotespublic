@@ -12,11 +12,15 @@ class ProfileController extends Controller
 {
     public function edit(): View
     {
+        abort_if(auth()->user()->isAnyAdmin(), 403, 'Admins manage their password elsewhere.');
+
         return view('profile.edit');
     }
 
     public function updatePassword(Request $request): RedirectResponse
     {
+        abort_if(auth()->user()->isAnyAdmin(), 403, 'Admins manage their password elsewhere.');
+
         $request->validate([
             'current_password' => ['required', 'current_password'],
             'password' => ['required', Password::min(8), 'confirmed'],
