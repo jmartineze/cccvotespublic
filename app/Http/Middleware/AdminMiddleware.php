@@ -10,7 +10,7 @@ class AdminMiddleware
 {
     public function handle(Request $request, Closure $next): Response
     {
-        if (! auth()->check() || ! auth()->user()->isAnyAdmin()) {
+        if (! auth()->check() || ! auth()->user()->actingAsAdmin()) {
             abort(403, 'Admin access required.');
         }
 

@@ -8,7 +8,7 @@ class StoreContestRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return auth()->check() && auth()->user()->isAnyAdmin();
+        return auth()->check() && auth()->user()->actingAsAdmin();
     }
 
     public function rules(): array
@@ -24,6 +24,10 @@ class StoreContestRequest extends FormRequest
             'criteria.*.description' => ['nullable', 'string', 'max:255'],
             'criteria.*.max_score' => ['required', 'integer', 'min:1', 'max:100'],
             'criteria.*.tiebreak_order' => ['nullable', 'integer', 'min:1'],
+            'special_prizes' => ['nullable', 'array'],
+            'special_prizes.*.id' => ['nullable', 'integer'],
+            'special_prizes.*.name' => ['required', 'string', 'max:255'],
+            'special_prizes.*.description' => ['nullable', 'string', 'max:500'],
         ];
     }
 

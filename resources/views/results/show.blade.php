@@ -109,6 +109,30 @@
             @endif
         </div>
 
+        {{-- Judge's special-prize picks --}}
+        @if(isset($mySpecialPrizes) && $contest->specialPrizes->isNotEmpty())
+            <div class="mt-6">
+                <p class="section-label mb-3">🏅 Your special-prize picks</p>
+                <div class="space-y-3">
+                    @foreach($contest->specialPrizes as $prize)
+                        @php $picks = $mySpecialPrizes[$prize->id] ?? collect(); @endphp
+                        <div class="card p-3">
+                            <p class="font-display font-700 text-sm" style="color: var(--color-text);">{{ $prize->name }}</p>
+                            @if($picks->isEmpty())
+                                <p class="text-xs mt-1" style="color: var(--color-muted);">No submissions marked.</p>
+                            @else
+                                <div class="flex flex-wrap gap-1.5 mt-2">
+                                    @foreach($picks as $p)
+                                        <span class="badge" style="background: rgba(0,212,255,0.12); color: #80e0ff; border-color: rgba(0,212,255,0.25);">{{ $p->character_name }}</span>
+                                    @endforeach
+                                </div>
+                            @endif
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        @endif
+
     {{-- ─── FULL LEADERBOARD (admin or closed contest) ─── --}}
     @else
         @if(empty($categories))
@@ -295,6 +319,49 @@
                     <p class="text-sm" style="color: var(--color-muted);">Tied on total score and all configured tiebreak criteria. A manual committee decision is required.</p>
                 </div>
             </div>
+        @endif
+
+        {{-- Special prizes — ranked by number of judge checks --}}
+        @if(isset($specialPrizeResults) && $specialPrizeResults->isNotEmpty())
+            <div class="divider"></div>
+            <div class="flex items-center gap-2 mb-4">
+                <p class="section-label">🏅 Special Prizes</p>
+            </div>
+
+            @foreach($specialPrizeResults as $prize)
+                <div class="mb-6">
+                    <h3 class="font-display font-800 text-base" style="color: var(--color-text);">{{ $prize->name }}</h3>
+                    @if($prize->description)
+                        <p class="text-xs mb-3" style="color: var(--color-muted);">{{ $prize->description }}</p>
+                    @else
+                        <div class="mb-3"></div>
+                    @endif
+
+                    @if($prize->rankedSubmissions->isEmpty())
+                        <p class="text-sm" style="color: var(--color-muted);">No submissions marked for this prize.</p>
+                    @else
+                        <div class="space-y-2">
+                            @foreach($prize->rankedSubmissions as $i => $sub)
+                                <div class="leaderboard-row {{ $i === 0 ? 'rank-top' : '' }}">
+                                    <span class="font-mono font-700 text-sm w-6 flex-shrink-0" style="color: var(--color-muted);">{{ $i + 1 }}</span>
+                                    @if($sub->images->isNotEmpty())
+                                        <img src="{{ $sub->images->first()->url }}" alt="{{ $sub->character_name }}" class="w-10 h-10 rounded-lg object-cover flex-shrink-0">
+                                    @else
+                                        <div class="w-10 h-10 rounded-lg flex-shrink-0" style="background: var(--color-faint);"></div>
+                                    @endif
+                                    <div class="flex-1 min-w-0">
+                                        <p class="font-display font-700 text-sm truncate" style="color: var(--color-text);">{{ $sub->character_name }}</p>
+                                        <p class="text-xs" style="color: var(--color-muted);">{{ $sub->discord_user }}</p>
+                                    </div>
+                                    <span class="badge flex-shrink-0" style="background: rgba(0,212,255,0.12); color: #80e0ff; border-color: rgba(0,212,255,0.25);">
+                                        {{ $sub->prize_checks }} {{ Str::plural('check', $sub->prize_checks) }}
+                                    </span>
+                                </div>
+                            @endforeach
+                        </div>
+                    @endif
+                </div>
+            @endforeach
         @endif
     @endif
 

@@ -3,9 +3,12 @@
     $initialCriteria = ($contest?->criteria ?? collect())->map(fn ($c) => [
         'name' => $c->name, 'description' => $c->description, 'max_score' => $c->max_score, 'tiebreak_order' => $c->tiebreak_order,
     ])->values();
+    $initialPrizes = ($contest?->specialPrizes ?? collect())->map(fn ($p) => [
+        'id' => $p->id, 'name' => $p->name, 'description' => $p->description,
+    ])->values();
 @endphp
 <form method="POST" action="{{ $action }}" enctype="multipart/form-data" class="space-y-5"
-      x-data="contestForm({{ $initialCriteria->toJson() }})">
+      x-data="contestForm({{ $initialCriteria->toJson() }}, {{ $initialPrizes->toJson() }})">
     @csrf
     @if($method !== 'POST') @method($method) @endif
 
@@ -113,6 +116,32 @@
         @error('criteria') <p class="error-msg">{{ $message }}</p> @enderror
     </div>
 
+    {{-- Special prizes (non-scoring toggles) --}}
+    <div>
+        <div class="flex items-center justify-between mb-1.5">
+            <label class="section-label">Special Prizes <span style="color: var(--color-muted); text-transform: none; font-weight: 400;">(optional)</span></label>
+            <button type="button" @click="addPrize()" class="btn btn-secondary btn-sm">+ Add prize</button>
+        </div>
+        <p class="text-xs mb-3" style="color: var(--color-muted);">
+            Side awards judges toggle per submission (e.g. “Best image”, “Made me laugh”). They don't affect scores and stay editable after voting starts.
+        </p>
+        <div class="space-y-3">
+            <template x-for="(prize, index) in prizes" :key="index">
+                <div class="card p-3 space-y-2">
+                    <input type="hidden" :name="'special_prizes[' + index + '][id]'" :value="prize.id || ''">
+                    <div class="flex gap-2">
+                        <input type="text" :name="'special_prizes[' + index + '][name]'" x-model="prize.name" class="input flex-1" placeholder="Prize name" required>
+                        <button type="button" @click="removePrize(index)" class="btn btn-danger btn-sm">✕</button>
+                    </div>
+                    <input type="text" :name="'special_prizes[' + index + '][description]'" x-model="prize.description" class="input" placeholder="Description (optional)">
+                </div>
+            </template>
+            <p x-show="prizes.length === 0" class="text-xs" style="color: var(--color-faint, var(--color-muted));">No special prizes.</p>
+        </div>
+        @error('special_prizes') <p class="error-msg">{{ $message }}</p> @enderror
+        @error('special_prizes.*.name') <p class="error-msg">Every special prize needs a name.</p> @enderror
+    </div>
+
     <div class="flex gap-3 pt-2">
         <button type="submit" class="btn btn-primary flex-1">
             {{ $contest ? 'Save Changes' : 'Create Contest' }}
@@ -122,16 +151,23 @@
 </form>
 
 <script>
-function contestForm(initialCriteria) {
+function contestForm(initialCriteria, initialPrizes) {
     return {
         criteria: initialCriteria && initialCriteria.length ? initialCriteria : [
             { name: '', description: '', max_score: 10, tiebreak_order: null },
         ],
+        prizes: initialPrizes || [],
         addCriterion() {
             this.criteria.push({ name: '', description: '', max_score: 10, tiebreak_order: null });
         },
         removeCriterion(index) {
             this.criteria.splice(index, 1);
+        },
+        addPrize() {
+            this.prizes.push({ id: null, name: '', description: '' });
+        },
+        removePrize(index) {
+            this.prizes.splice(index, 1);
         },
     };
 }

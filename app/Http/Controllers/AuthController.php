@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -31,16 +33,19 @@ class AuthController extends Controller
 
         $this->ensureIsNotRateLimited($request);
 
-        $field = str_contains($data['identifier'], '@') ? 'email' : 'username';
-        $credentials = [$field => $data['identifier'], 'password' => $data['password']];
+        // The identifier matches either the email or the username, so anyone
+        // who has both can sign in with whichever they prefer.
+        $identifier = $data['identifier'];
+        $user = User::where('email', $identifier)->orWhere('username', $identifier)->first();
 
-        if (! Auth::attempt($credentials, $request->boolean('remember'))) {
+        if (! $user || ! Hash::check($data['password'], $user->password)) {
             RateLimiter::hit($this->throttleKey($request));
 
             return back()->withErrors(['identifier' => 'Invalid credentials.'])->onlyInput('identifier');
         }
 
         RateLimiter::clear($this->throttleKey($request));
+        Auth::login($user, $request->boolean('remember'));
         $request->session()->regenerate();
 
         return redirect()->intended(route('dashboard'));

@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreVoteRequest;
 use App\Models\Contest;
 use App\Models\HonorableMention;
+use App\Models\SpecialPrize;
+use App\Models\SpecialPrizeVote;
 use App\Models\Submission;
 use App\Models\Vote;
 use App\Models\VoteScore;
@@ -17,8 +19,10 @@ class VotingController extends Controller
 {
     public function index(Contest $contest): View
     {
-        abort_if(auth()->user()->isAnyAdmin(), 403, 'Admins cannot participate in voting.');
+        abort_if(auth()->user()->actingAsAdmin(), 403, 'Switch to judge mode to participate in voting.');
         abort_if($contest->status === 'draft', 404);
+
+        $contest->loadMissing('owner');
 
         $myHm = (int) HonorableMention::where('user_id', auth()->id())
             ->where('contest_id', $contest->id)
@@ -46,7 +50,7 @@ class VotingController extends Controller
 
     public function show(Contest $contest, Submission $submission): View
     {
-        abort_if(auth()->user()->isAnyAdmin(), 403, 'Admins cannot participate in voting.');
+        abort_if(auth()->user()->actingAsAdmin(), 403, 'Switch to judge mode to participate in voting.');
         abort_if($contest->status === 'draft', 404);
         abort_if($submission->contest_id !== $contest->id, 404);
 
@@ -65,12 +69,21 @@ class VotingController extends Controller
 
         $isMyHm = $myHm === $submission->id;
 
-        return view('judge.voting.show', compact('contest', 'submission', 'myVote', 'myHm', 'isMyHm', 'criteria', 'myVoteScores'));
+        $specialPrizes = $contest->specialPrizes;
+        $myPrizeIds = SpecialPrizeVote::where('user_id', auth()->id())
+            ->where('submission_id', $submission->id)
+            ->pluck('special_prize_id')
+            ->all();
+
+        return view('judge.voting.show', compact(
+            'contest', 'submission', 'myVote', 'myHm', 'isMyHm', 'criteria', 'myVoteScores',
+            'specialPrizes', 'myPrizeIds'
+        ));
     }
 
     public function vote(StoreVoteRequest $request, Contest $contest, Submission $submission): RedirectResponse
     {
-        abort_if(auth()->user()->isAnyAdmin(), 403, 'Admins cannot participate in voting.');
+        abort_if(auth()->user()->actingAsAdmin(), 403, 'Switch to judge mode to participate in voting.');
         abort_if($submission->contest_id !== $contest->id, 404);
         abort_unless($contest->isActive(), 403, 'Voting is not open for this contest.');
 
@@ -97,7 +110,7 @@ class VotingController extends Controller
 
     public function honorableMention(Contest $contest, Submission $submission): RedirectResponse
     {
-        abort_if(auth()->user()->isAnyAdmin(), 403, 'Admins cannot participate in voting.');
+        abort_if(auth()->user()->actingAsAdmin(), 403, 'Switch to judge mode to participate in voting.');
         abort_if($submission->contest_id !== $contest->id, 404);
         // HM stays editable on closed contests (conflict resolution) but never on drafts.
         abort_if($contest->status === 'draft', 404);
@@ -119,5 +132,32 @@ class VotingController extends Controller
         );
 
         return back()->with('success', "⭐ {$submission->character_name} marked as your Honorable Mention!");
+    }
+
+    public function specialPrize(Contest $contest, SpecialPrize $prize, Submission $submission): RedirectResponse
+    {
+        abort_if(auth()->user()->actingAsAdmin(), 403, 'Switch to judge mode to participate in voting.');
+        abort_if($submission->contest_id !== $contest->id, 404);
+        abort_if($prize->contest_id !== $contest->id, 404);
+        abort_unless($contest->isActive(), 403, 'Voting is not open for this contest.');
+
+        $existing = SpecialPrizeVote::where('user_id', auth()->id())
+            ->where('special_prize_id', $prize->id)
+            ->where('submission_id', $submission->id)
+            ->first();
+
+        if ($existing) {
+            $existing->delete();
+
+            return back()->with('success', "Removed “{$prize->name}” from {$submission->character_name}.");
+        }
+
+        SpecialPrizeVote::create([
+            'user_id' => auth()->id(),
+            'special_prize_id' => $prize->id,
+            'submission_id' => $submission->id,
+        ]);
+
+        return back()->with('success', "🏅 {$submission->character_name} marked for “{$prize->name}”.");
     }
 }

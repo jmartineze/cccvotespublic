@@ -22,6 +22,9 @@
             @endif
             <div class="p-4 flex items-center justify-between gap-3">
                 <div>
+                    @if(auth()->user()->isJudge() && $contest->owner)
+                        <span class="badge mb-1" style="background: rgba(155,90,255,0.12); color: #c4a0ff; border-color: rgba(155,90,255,0.25); font-size: 0.6rem;">{{ $contest->owner->name }}</span>
+                    @endif
                     <h2 class="font-display font-700 text-base" style="color: var(--color-text);">{{ $contest->name }}</h2>
                     <p class="text-sm" style="color: var(--color-muted);">{{ $contest->submissions_count }} submissions</p>
                 </div>

@@ -32,6 +32,11 @@ class Submission extends Model
         return $this->hasMany(Vote::class);
     }
 
+    public function specialPrizeVotes(): HasMany
+    {
+        return $this->hasMany(SpecialPrizeVote::class);
+    }
+
     public function getCategoryAttribute(): string
     {
         return $this->gender.' '.$this->style;

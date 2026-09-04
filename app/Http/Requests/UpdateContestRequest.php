@@ -8,7 +8,7 @@ class UpdateContestRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return auth()->check() && auth()->user()->isAnyAdmin();
+        return auth()->check() && auth()->user()->actingAsAdmin();
     }
 
     public function rules(): array
@@ -19,6 +19,11 @@ class UpdateContestRequest extends FormRequest
             'cover_image' => ['nullable', 'image', 'max:5120'],
             'status' => ['required', 'in:draft,active,closed'],
             'contest_type' => ['required', 'in:image,character_scenario'],
+            // Special prizes stay editable at any point in the contest.
+            'special_prizes' => ['nullable', 'array'],
+            'special_prizes.*.id' => ['nullable', 'integer'],
+            'special_prizes.*.name' => ['required', 'string', 'max:255'],
+            'special_prizes.*.description' => ['nullable', 'string', 'max:500'],
         ];
 
         if (! $this->route('contest')->hasVotes()) {

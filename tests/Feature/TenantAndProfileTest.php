@@ -47,12 +47,15 @@ class TenantAndProfileTest extends TestCase
         $this->assertDatabaseMissing('users', ['id' => $tenant->id]);
     }
 
-    public function test_profile_is_judges_only(): void
+    public function test_profile_is_reachable_by_every_signed_in_user(): void
     {
-        $tenant = User::factory()->create(['role' => 'tenant_admin']);
-        $judge = User::factory()->create(['role' => 'judge', 'owner_id' => $tenant->id, 'email' => null, 'username' => 'j']);
+        $super = User::factory()->create(['role' => 'super_admin']);
+        $tenant = $this->makeTenantAdmin();
+        $coAdmin = $this->makeCoAdmin($tenant, 'c');
+        $judge = $this->makeJudge($tenant, 'j');
 
-        $this->actingAs($tenant)->get('/profile')->assertForbidden();
-        $this->actingAs($judge)->get('/profile')->assertOk();
+        foreach ([$super, $tenant, $coAdmin, $judge] as $user) {
+            $this->actingAs($user)->get('/profile')->assertOk();
+        }
     }
 }

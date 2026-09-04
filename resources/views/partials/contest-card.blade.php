@@ -14,6 +14,11 @@
     <div class="p-4">
         <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
+                @if(auth()->user()->isJudge() && $contest->owner)
+                    <span class="badge mb-1" style="background: rgba(155,90,255,0.12); color: #c4a0ff; border-color: rgba(155,90,255,0.25); font-size: 0.6rem;">
+                        {{ $contest->owner->name }}
+                    </span>
+                @endif
                 <h2 class="font-display font-700 text-base truncate" style="color: var(--color-text);">{{ $contest->name }}</h2>
                 @if($contest->description)
                     <p class="text-sm mt-0.5 line-clamp-2" style="color: var(--color-muted);">{{ $contest->description }}</p>
@@ -32,14 +37,14 @@
                 <span class="font-mono font-700" style="color: var(--color-text);">{{ $contest->submissions_count }}</span> submissions
             </span>
             <div class="flex items-center gap-2">
-                @if(!auth()->user()->isAnyAdmin() && $contest->status === 'active')
+                @if(auth()->user()->actingAsJudge() && $contest->status === 'active')
                     <a href="{{ route('judge.voting.index', $contest) }}" class="btn btn-primary btn-sm">
                         Vote
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
                         </svg>
                     </a>
-                @elseif(!auth()->user()->isAnyAdmin() && $contest->status === 'closed')
+                @elseif(auth()->user()->actingAsJudge() && $contest->status === 'closed')
                     <a href="{{ route('judge.voting.index', $contest) }}" class="btn btn-secondary btn-sm">My Votes</a>
                 @endif
                 @if($contest->status !== 'draft')

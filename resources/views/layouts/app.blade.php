@@ -47,7 +47,20 @@
                     Tenants
                 </a>
             @endif
-            @if(auth()->user()->isAnyAdmin())
+            @if(auth()->user()->actingAsAdmin())
+                @php $adminTenantIds = auth()->user()->adminTenantIds(); @endphp
+                @if(count($adminTenantIds) > 1)
+                    @php $tenantNames = \App\Models\User::whereIn('id', $adminTenantIds)->pluck('name', 'id'); @endphp
+                    <form method="POST" action="{{ route('mode.tenant') }}" x-data>
+                        @csrf
+                        <select name="tenant_id" onchange="$el.closest('form').submit()"
+                            class="input btn-sm" style="padding: 0.35rem 0.5rem; min-width: 8rem;">
+                            @foreach($tenantNames as $tid => $tname)
+                                <option value="{{ $tid }}" @selected(auth()->user()->currentTenantId() == $tid)>{{ $tname }}</option>
+                            @endforeach
+                        </select>
+                    </form>
+                @endif
                 <a href="{{ route('admin.contests.index') }}" class="btn btn-sm btn-secondary">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
@@ -55,6 +68,25 @@
                     </svg>
                     Admin
                 </a>
+            @endif
+            @if(auth()->user()->canSwitchMode())
+                <form method="POST" action="{{ route('mode.toggle') }}">
+                    @csrf
+                    @if(auth()->user()->inJudgeMode())
+                        <button type="submit" class="btn btn-sm" style="background: rgba(255,45,120,0.15); color: #ff2d78; border: 1px solid rgba(255,45,120,0.35);" title="You are in judge mode — tap to return to the admin panel">
+                            <span class="w-1.5 h-1.5 rounded-full bg-current animate-pulse"></span>
+                            Judge mode · Exit
+                        </button>
+                    @else
+                        <button type="submit" class="btn btn-sm btn-ghost" title="Browse and vote as a judge">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                            </svg>
+                            Judge view
+                        </button>
+                    @endif
+                </form>
             @endif
             <form method="POST" action="{{ route('logout') }}">
                 @csrf
@@ -111,7 +143,7 @@
             </svg>
             Results
         </a>
-        @if(auth()->user()->isAnyAdmin())
+        @if(auth()->user()->actingAsAdmin())
             <a href="{{ route('admin.contests.index') }}" class="nav-item {{ request()->routeIs('admin.*') ? 'active' : '' }}">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
@@ -119,14 +151,13 @@
                 </svg>
                 Admin
             </a>
-        @else
-            <a href="{{ route('profile.edit') }}" class="nav-item {{ request()->routeIs('profile.*') ? 'active' : '' }}">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-                </svg>
-                Profile
-            </a>
         @endif
+        <a href="{{ route('profile.edit') }}" class="nav-item {{ request()->routeIs('profile.*') ? 'active' : '' }}">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+            </svg>
+            Profile
+        </a>
     </nav>
 </body>
 </html>

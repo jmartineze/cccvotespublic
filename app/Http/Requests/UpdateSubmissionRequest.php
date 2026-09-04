@@ -11,7 +11,7 @@ class UpdateSubmissionRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return auth()->check() && auth()->user()->isAnyAdmin();
+        return auth()->check() && auth()->user()->actingAsAdmin();
     }
 
     public function rules(): array

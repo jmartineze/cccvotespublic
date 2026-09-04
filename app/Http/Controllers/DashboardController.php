@@ -10,13 +10,13 @@ class DashboardController extends Controller
     public function index(): View
     {
         // Active contests are always shown in full (there are only ever a few).
-        $activeContests = Contest::withCount('submissions')
+        $activeContests = Contest::with('owner')->withCount('submissions')
             ->where('status', 'active')
             ->latest()
             ->get();
 
         // Everything else (draft/closed) is paginated.
-        $contests = Contest::withCount('submissions')
+        $contests = Contest::with('owner')->withCount('submissions')
             ->where('status', '!=', 'active')
             ->orderByRaw("CASE status WHEN 'draft' THEN 0 ELSE 1 END")
             ->latest()

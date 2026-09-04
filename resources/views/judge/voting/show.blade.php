@@ -180,6 +180,22 @@
                     </button>
                 </form>
             </div>
+
+            @if($specialPrizes->isNotEmpty())
+                @php $mine = $specialPrizes->whereIn('id', $myPrizeIds); @endphp
+                <div class="mt-3 p-4 rounded-xl" style="background: rgba(0,212,255,0.04); border: 1px solid rgba(0,212,255,0.15);">
+                    <p class="font-display font-700 text-sm mb-2" style="color: var(--color-text);">🏅 Special prizes you gave this submission</p>
+                    @if($mine->isEmpty())
+                        <p class="text-xs" style="color: var(--color-muted);">None.</p>
+                    @else
+                        <div class="flex flex-wrap gap-1.5">
+                            @foreach($mine as $prize)
+                                <span class="badge" style="background: rgba(0,212,255,0.12); color: #80e0ff; border-color: rgba(0,212,255,0.25);">{{ $prize->name }}</span>
+                            @endforeach
+                        </div>
+                    @endif
+                </div>
+            @endif
         @else
             <div class="divider"></div>
             <h2 class="font-display font-700 text-base mb-1" style="color: var(--color-text);">
@@ -296,6 +312,38 @@
                     </button>
                 </form>
             </div>
+
+            {{-- Special prizes (non-scoring toggles) --}}
+            @if($specialPrizes->isNotEmpty())
+                <div class="divider"></div>
+                <div class="p-4 rounded-xl" style="background: rgba(0,212,255,0.04); border: 1px solid rgba(0,212,255,0.15);">
+                    <p class="font-display font-700 text-sm" style="color: var(--color-text);">🏅 Special Prizes</p>
+                    <p class="text-xs mt-0.5 mb-3" style="color: var(--color-muted);">Toggle any that fit this submission. They don't affect scores — mark as many submissions as you like across prizes.</p>
+                    <div class="space-y-2">
+                        @foreach($specialPrizes as $prize)
+                            @php $checked = in_array($prize->id, $myPrizeIds); @endphp
+                            <form method="POST" action="{{ route('judge.voting.special-prize', [$contest, $prize, $submission]) }}">
+                                @csrf
+                                <button type="submit" class="btn btn-full" style="justify-content: flex-start; gap: 0.6rem; {{ $checked
+                                    ? 'background: rgba(0,212,255,0.15); color: #80e0ff; border: 1px solid rgba(0,212,255,0.35);'
+                                    : 'background: rgba(255,255,255,0.02); color: var(--color-muted); border: 1px solid var(--color-border);' }}">
+                                    <span style="width:1.1rem;height:1.1rem;border-radius:0.3rem;border:1.5px solid currentColor;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">
+                                        @if($checked)
+                                            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-8 8a1 1 0 01-1.4 0l-4-4a1 1 0 111.4-1.4L8 12.6l7.3-7.3a1 1 0 011.4 0z" clip-rule="evenodd"/></svg>
+                                        @endif
+                                    </span>
+                                    <span style="text-align:left; line-height:1.3;">
+                                        <span class="font-700" style="color: var(--color-text);">{{ $prize->name }}</span>
+                                        @if($prize->description)
+                                            <br><span class="text-xs" style="color: var(--color-muted);">{{ $prize->description }}</span>
+                                        @endif
+                                    </span>
+                                </button>
+                            </form>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
         @endif
     </div>
 </div>

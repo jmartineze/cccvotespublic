@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Contest;
 use App\Models\HonorableMention;
+use App\Models\SpecialPrizeVote;
 use App\Models\Submission;
 use App\Models\Vote;
 use App\Models\VoteScore;
@@ -15,9 +16,9 @@ class ResultsController extends Controller
     public function index(): View
     {
         // Admins see all non-draft contests; judges only see active/closed
-        $query = Contest::withCount('submissions')->latest();
+        $query = Contest::with('owner')->withCount('submissions')->latest();
 
-        if (! auth()->user()->isAnyAdmin()) {
+        if (! auth()->user()->actingAsAdmin()) {
             $query->where('status', '!=', 'draft');
         }
 
@@ -28,9 +29,9 @@ class ResultsController extends Controller
 
     public function show(Contest $contest): View
     {
-        abort_if($contest->status === 'draft' && ! auth()->user()->isAnyAdmin(), 403);
+        abort_if($contest->status === 'draft' && ! auth()->user()->actingAsAdmin(), 403);
 
-        $isAdmin = auth()->user()->isAnyAdmin();
+        $isAdmin = auth()->user()->actingAsAdmin();
         $isClosed = $contest->isClosed();
 
         // Results are visible in full only when: admin OR contest is closed
@@ -52,7 +53,16 @@ class ResultsController extends Controller
                 ->with(['submission.images'])
                 ->first();
 
-            return view('results.show', compact('contest', 'locked', 'submissions', 'myHm'));
+            // The judge's own special-prize picks: [prize => Collection<submission>]
+            $mySpecialPrizes = $contest->specialPrizes->mapWithKeys(function ($prize) use ($submissions) {
+                $picked = SpecialPrizeVote::where('user_id', auth()->id())
+                    ->where('special_prize_id', $prize->id)
+                    ->pluck('submission_id');
+
+                return [$prize->id => $submissions->whereIn('id', $picked)->values()];
+            });
+
+            return view('results.show', compact('contest', 'locked', 'submissions', 'myHm', 'mySpecialPrizes'));
         }
 
         // Full leaderboard for admin or closed contests
@@ -88,9 +98,23 @@ class ResultsController extends Controller
             'category' => $top3BySubmission[$submissionId]['category'],
         ]);
 
+        // Special prizes: per prize, submissions with ≥1 check, most checks first.
+        $specialPrizeResults = $contest->specialPrizes->map(function ($prize) use ($contest) {
+            $prize->setRelation('rankedSubmissions', Submission::where('contest_id', $contest->id)
+                ->whereHas('specialPrizeVotes', fn ($q) => $q->where('special_prize_id', $prize->id))
+                ->withCount(['specialPrizeVotes as prize_checks' => fn ($q) => $q->where('special_prize_id', $prize->id)])
+                ->with('images')
+                ->orderByDesc('prize_checks')
+                ->orderBy('character_name')
+                ->get());
+
+            return $prize;
+        });
+
         return view('results.show', compact(
             'contest', 'locked', 'categories',
-            'honorableMentions', 'hmBySubmission', 'hmConflicts', 'hmWinnerConflicts'
+            'honorableMentions', 'hmBySubmission', 'hmConflicts', 'hmWinnerConflicts',
+            'specialPrizeResults'
         ));
     }
 

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Contest extends Model
@@ -11,6 +12,12 @@ class Contest extends Model
     use BelongsToTenant;
 
     protected $fillable = ['owner_id', 'name', 'description', 'cover_image', 'status', 'contest_type'];
+
+    /** The tenant admin who owns this contest. */
+    public function owner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'owner_id');
+    }
 
     /** Per-instance memo for hasVotes() — several requests call it 2-3× per contest. */
     protected ?bool $hasVotesCache = null;
@@ -23,6 +30,11 @@ class Contest extends Model
     public function criteria(): HasMany
     {
         return $this->hasMany(ContestCriterion::class)->orderBy('sort_order');
+    }
+
+    public function specialPrizes(): HasMany
+    {
+        return $this->hasMany(SpecialPrize::class)->orderBy('sort_order');
     }
 
     public function isActive(): bool

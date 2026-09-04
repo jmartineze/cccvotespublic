@@ -69,4 +69,35 @@
         </div>
     </form>
 </div>
+
+@if(session('invite_prompt'))
+    @php $prompt = session('invite_prompt'); @endphp
+    <div x-data="{ open: true }" x-show="open" x-transition.opacity
+         class="fixed inset-0 z-50 flex items-center justify-center p-4"
+         style="background: rgba(0,0,0,0.6);">
+        <div class="card-glass p-6 w-full max-w-sm" @click.outside="open = false">
+            <h2 class="font-display font-800 text-lg mb-2" style="color: var(--color-text);">This judge already exists</h2>
+            <p class="text-sm mb-1" style="color: var(--color-muted);">
+                <span class="font-mono" style="color: #00d4ff;">{{ '@'.$prompt['username'] }}</span> already belongs to
+                <span style="color: var(--color-text);">{{ $prompt['name'] }}</span>.
+            </p>
+            @if($prompt['already_member'])
+                <p class="text-sm mb-5" style="color: #ffb4b4;">They're already part of your tenant. Pick a different username to create a new account.</p>
+                <div class="flex justify-end">
+                    <button @click="open = false" class="btn btn-secondary btn-sm">OK</button>
+                </div>
+            @else
+                <p class="text-sm mb-5" style="color: var(--color-muted);">Would you like to <strong style="color: var(--color-text);">invite them</strong> to your tenant instead? No new account is created and their password is not changed.</p>
+                <div class="flex gap-2 justify-end">
+                    <button @click="open = false" class="btn btn-ghost btn-sm">No, use another name</button>
+                    <form method="POST" action="{{ route('admin.users.invite') }}">
+                        @csrf
+                        <input type="hidden" name="user_id" value="{{ $prompt['id'] }}">
+                        <button type="submit" class="btn btn-primary btn-sm">Yes, invite</button>
+                    </form>
+                </div>
+            @endif
+        </div>
+    </div>
+@endif
 @endsection

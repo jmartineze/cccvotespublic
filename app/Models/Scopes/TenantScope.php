@@ -20,8 +20,12 @@ class TenantScope implements Scope
             return;
         }
 
-        $tenantId = $user->role === 'tenant_admin' ? $user->id : $user->owner_id;
+        // Admin view: only the tenant currently being administered.
+        // Judge view: every tenant the user is a member of.
+        $ids = $user->actingAsAdmin()
+            ? array_filter([$user->currentTenantId()])
+            : $user->memberTenantIds();
 
-        $builder->where($model->qualifyColumn('owner_id'), $tenantId);
+        $builder->whereIn($model->qualifyColumn('owner_id'), $ids ?: [0]);
     }
 }

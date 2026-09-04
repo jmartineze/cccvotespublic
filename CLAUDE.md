@@ -11,9 +11,26 @@ Judges use this system exclusively on mobile to score art/character submissions 
 
 ## Architecture
 
-### Roles
-- **Admin** (`is_admin = true`): full access — creates contests, uploads submissions, manages judges, views full results at any time. Cannot vote.
-- **Judge** (`is_admin = false`): votes on active contests, sees own votes during active voting, full leaderboard only after contest closes.
+### Roles (`users.role` = `super_admin` | `tenant_admin` | `judge`)
+- **super_admin**: manages tenants (`/super-admin/*`). Not tenant-scoped. Does not run contests, cannot vote, no judge mode.
+- **tenant_admin**: owns a tenant — contests/submissions, judge roster, promote/revoke co-admins, full results any time. Cannot vote *while in admin mode*.
+- **judge** (`users.role = 'judge'`, the only member role): the actual per-tenant capability lives on the `tenant_memberships` pivot.
+
+### Tenant memberships (`tenant_memberships(tenant_id, user_id, role)`)
+- A judge can belong to **many tenants**, and be **`judge` or `co_admin` per tenant** (`pivot.role`). `users.owner_id` is only the "home"/creator tenant and is mirrored into a `judge` membership row by a `User::created` hook.
+- **co_admin** = a membership with `role = 'co_admin'`. Full admin powers for *that* tenant (contests, submissions, judges) except promote/revoke co-admins (tenant_admin only). A judge can co-admin several tenants.
+- `User` helpers: `memberTenantIds()` (all memberships; `[id]` for tenant_admin), `adminTenantIds()` (co-admin memberships; `[id]` for tenant_admin), `isCoAdmin()` / `isCoAdminOf($t)`, `currentTenantId()`, `belongsToTenant($t)`.
+- **`currentTenantId()`** = the tenant being administered now: `id` for tenant_admin; for a multi-tenant co-admin it's `session('admin_tenant_id')` (set by `POST /mode/tenant`, nav `<select>` shown when `count(adminTenantIds()) > 1`), else the first admin tenant.
+- **`TenantScope` on `Contest`**: admin view → `whereIn(owner_id, [currentTenantId()])`; judge view → `whereIn(owner_id, memberTenantIds())`; empty → `[0]` (matches nothing).
+- **Usernames are globally unique** (`users_username_unique`). Creating a judge whose username belongs to an existing judge shows an "invite instead?" prompt (`session('invite_prompt')` → modal in `admin/users/create`). `POST /admin/users/invite` adds a `judge` membership, never touches the password. A tenant-admin username → plain "taken" error.
+- **Removing a judge** (`UserController::destroy`): drops the membership. Votes/HM on that tenant's **closed** contests are always kept; on active/draft contests only when `delete_open_votes` is passed (confirm modal in `admin/users/index`). When it was their last membership the account + all its votes/HM are deleted.
+- **Password reset** by a tenant admin only works if the judge belongs to exactly one tenant. A shared account changes its own credentials from **Profile** (`/profile`, bottom-nav tab for every role): name, username, email, password. `username` required for `role = 'judge'` / optional otherwise; `email` required for the email-login roles / optional for judges; a blank password field keeps the current one (a new one needs `current_password`).
+- Contest cards / lists / voting header show a tenant-owner badge (`$contest->owner->name`) to judges. Eager-load `owner`.
+
+### View mode (`users.judge_mode`, tenant_admin + any co-admin)
+- Persistent per-account toggle (`POST /mode/toggle`, `ModeController`). When on, the user browses and votes as a judge and the admin panel 403s.
+- `User` helpers: `canSwitchMode()`, `inJudgeMode()`, `actingAsAdmin()`, `actingAsJudge()`. **Gate on `actingAsAdmin()` / `actingAsJudge()`, not `isAnyAdmin()`**, anywhere the current view matters (middleware, VotingController, ResultsController, MediaController, BelongsToTenant, TenantScope, nav).
+- `AdminMiddleware` requires `actingAsAdmin()`; `demote` clears `judge_mode` when no co-admin memberships remain.
 
 ### Key Models & Relationships
 ```
@@ -51,16 +68,22 @@ HonorableMention → belongs to User + Submission + Contest
 - Locked results: judge sees only their own HM pick at the bottom of personal scores
 - Unlocked results: all HMs listed with judge names; conflict alerts shown above the list
 
+### Special Prizes (`special_prizes`, `special_prize_votes`)
+- Non-scoring, toggle-style side awards per contest (name + optional description). Configured in the contest form alongside criteria, but **stay editable at any point** (id-aware `ContestController::syncSpecialPrizes` — dropped prizes cascade-delete their votes; kept prizes keep theirs).
+- A judge toggles any number of submissions for any number of prizes: `POST /contests/{contest}/special-prize/{prize}/{submission}` (`VotingController::specialPrize`) — creates/deletes a `special_prize_votes` row. Unique on `(special_prize_id, user_id, submission_id)`. Requires `actingAsJudge()` + `status = active`; prize/submission must belong to the bound contest.
+- Voting detail (`judge/voting/show`): checkbox list in the active view; a read-only badge list of the judge's own picks in the closed view.
+- Results (`ResultsController::show`, unlocked): `$specialPrizeResults` — per prize, submissions with ≥1 check ordered by `prize_checks` desc (zero-check submissions omitted). Locked view shows the judge's own picks.
+
 ### Blind Voting Rule
 Results page is **locked** while a contest is `active` for judges — they see only their own votes. Full leaderboard unlocks when contest status changes to `closed`. Admins always see full results.
 
 ### Voting access rules (VotingController)
-- Judges may only act on contests owned by their tenant — `Contest` route binding carries `TenantScope`, so a foreign contest 404s. `$submission->contest_id` is checked against the bound contest.
+- Judges may only act on contests owned by a tenant they belong to — `Contest` route binding carries `TenantScope` (`whereIn owner_id, memberTenantIds()`), so a foreign contest 404s. `$submission->contest_id` is checked against the bound contest.
 - `vote()` requires `status === 'active'`. `index()` / `show()` / `honorableMention()` reject `draft` (404); HM stays editable on `closed`.
 - `Vote.user_id` is always `auth()->id()` — never taken from the request.
 
 ### Abuse protection
-- `POST /login`: 5 failed attempts per `identifier+IP` → cooldown (`AuthController`), plus `throttle:20,1`.
+- `POST /login`: the identifier is matched against `email` **or** `username` (`User::where('email', $id)->orWhere('username', $id)`), so a user with both signs in with either. 5 failed attempts per `identifier+IP` → cooldown (`AuthController`), plus `throttle:20,1`.
 - `password.email` / `password.update`: `throttle:6,1`. `judge.voting.vote` / `.hm`: `throttle:60,1`.
 - `robots.txt` is `Disallow: /`; all views send `noindex, nofollow`.
 
@@ -75,6 +98,9 @@ Results page is **locked** while a contest is `active` for judges — they see o
 - `submissions`: `['contest_id', 'discord_user', 'gender']` — one entry per gender per contest per Discord user
 - `votes`: `['user_id', 'submission_id']` — one vote per judge per submission
 - `honorable_mentions`: `['user_id', 'contest_id']` — one HM per judge per contest
+- `special_prize_votes`: `['special_prize_id', 'user_id', 'submission_id']` (`sp_vote_unique`) — one check per judge per submission per prize
+- `users`: `username` — globally unique (was `['owner_id', 'username']`)
+- `tenant_memberships`: `['tenant_id', 'user_id']` — one membership row per judge per tenant; `role` = `judge` | `co_admin`
 
 ## File Structure
 
@@ -84,13 +110,15 @@ app/
     Controllers/
       AuthController.php
       PasswordResetController.php  # Forgot-password flow via Laravel's Password broker (SMTP)
+      MediaController.php          # Auth-gated submission images / contest covers
+      ModeController.php           # POST /mode/toggle (judge-mode) + /mode/tenant (co-admin tenant switch)
       DashboardController.php
-      ProfileController.php
+      ProfileController.php        # GET/POST /profile — self-service name/username/email/password (all roles)
       ResultsController.php
       Admin/
-        ContestController.php      # Contest CRUD
+        ContestController.php      # Contest CRUD (tenant_admin + co_admin)
         SubmissionController.php   # Submission upload + delete
-        UserController.php         # Judge management + password reset
+        UserController.php         # Judges + co-admins: create, reset pw, remove, promote/demote
       Judge/
         VotingController.php       # Voting index, show, submit
     Middleware/
@@ -106,6 +134,9 @@ app/
     SubmissionImage.php
     Vote.php                       # Auto-calculates total_score on save
     HonorableMention.php
+    SpecialPrize.php               # Non-scoring toggle award per contest
+    SpecialPrizeVote.php           # judge × submission × prize check
+    TenantMembership.php           # judge ↔ tenant pivot (multi-tenant judges)
     User.php
 
 resources/
@@ -163,12 +194,14 @@ docker-compose exec app bash  # Shell into PHP container
 
 ## Seed Accounts
 
-| Role | Email | Password |
+| Role | Login | Password |
 |------|-------|----------|
-| Admin | `admin@ccc.local` | `password` |
-| Judge Alpha | `alpha@ccc.local` | `password` |
-| Judge Beta | `beta@ccc.local` | `password` |
-| Judge Gamma | `gamma@ccc.local` | `password` |
+| super_admin | `admin@ccc.local` (email) | `password` |
+| tenant_admin | `tenant1@ccc.local` / `tenant2@ccc.local` (email) | `password` |
+| judge | `alpha` / `beta` / `gamma` (username) | `password` |
+| co_admin | `delta` (username) | `password` |
+
+`alpha` is a judge in both `tenant1` and `tenant2`; `delta` is a co-admin of both (multi-tenant demo).
 
 ## Design System
 

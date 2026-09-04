@@ -22,25 +22,27 @@ class ContestController extends Controller
 
     public function create(): View
     {
-        abort_unless(auth()->user()->isTenantAdmin(), 403, 'Only tenant admins create contests.');
+        abort_if(auth()->user()->isSuperAdmin(), 403, 'Super-admins do not run contests.');
 
         return view('admin.contests.create');
     }
 
     public function store(StoreContestRequest $request): RedirectResponse
     {
-        abort_unless(auth()->user()->isTenantAdmin(), 403, 'Only tenant admins create contests.');
+        abort_if(auth()->user()->isSuperAdmin(), 403, 'Super-admins do not run contests.');
 
-        $data = $request->safe()->except('criteria');
+        $data = $request->safe()->except(['criteria', 'special_prizes']);
         $criteria = $request->validated('criteria');
+        $specialPrizes = $request->validated('special_prizes') ?? [];
 
         if ($request->hasFile('cover_image')) {
             $data['cover_image'] = $request->file('cover_image')->store('contests', 'public');
         }
 
-        DB::transaction(function () use ($data, $criteria) {
+        DB::transaction(function () use ($data, $criteria, $specialPrizes) {
             $contest = Contest::create($data);
             $this->syncCriteria($contest, $criteria);
+            $this->syncSpecialPrizes($contest, $specialPrizes);
         });
 
         return redirect()->route('admin.contests.index')
@@ -60,6 +62,36 @@ class ContestController extends Controller
         }
     }
 
+    /**
+     * Id-aware upsert so existing prizes keep their votes when the contest is
+     * edited mid-run; prizes dropped from the form are removed (cascade).
+     */
+    private function syncSpecialPrizes(Contest $contest, array $prizes): void
+    {
+        $keep = [];
+
+        foreach (array_values($prizes) as $index => $prize) {
+            $attrs = [
+                'name' => $prize['name'],
+                'description' => $prize['description'] ?? null,
+                'sort_order' => $index,
+            ];
+
+            $existing = ! empty($prize['id'])
+                ? $contest->specialPrizes()->whereKey($prize['id'])->first()
+                : null;
+
+            if ($existing) {
+                $existing->update($attrs);
+                $keep[] = $existing->id;
+            } else {
+                $keep[] = $contest->specialPrizes()->create($attrs)->id;
+            }
+        }
+
+        $contest->specialPrizes()->whereKeyNot($keep)->delete();
+    }
+
     public function edit(Contest $contest): View
     {
         return view('admin.contests.edit', compact('contest'));
@@ -68,7 +100,8 @@ class ContestController extends Controller
     public function update(UpdateContestRequest $request, Contest $contest): RedirectResponse
     {
         $criteria = $request->validated('criteria');
-        $data = $request->safe()->except('criteria');
+        $specialPrizes = $request->validated('special_prizes') ?? [];
+        $data = $request->safe()->except(['criteria', 'special_prizes']);
 
         if ($request->hasFile('cover_image')) {
             if ($contest->cover_image) {
@@ -77,13 +110,15 @@ class ContestController extends Controller
             $data['cover_image'] = $request->file('cover_image')->store('contests', 'public');
         }
 
-        DB::transaction(function () use ($data, $criteria, $contest) {
+        DB::transaction(function () use ($data, $criteria, $specialPrizes, $contest) {
             $contest->update($data);
 
             if ($criteria !== null && ! $contest->hasVotes()) {
                 $contest->criteria()->delete();
                 $this->syncCriteria($contest, $criteria);
             }
+
+            $this->syncSpecialPrizes($contest, $specialPrizes);
         });
 
         return redirect()->route('admin.contests.index')

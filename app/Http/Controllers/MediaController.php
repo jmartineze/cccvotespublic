@@ -25,7 +25,7 @@ class MediaController extends Controller
         $contest = $submission->contest()->first();
         abort_unless($contest, 404);
 
-        abort_if($contest->status === 'draft' && ! $request->user()->isAnyAdmin(), 404);
+        abort_if($contest->status === 'draft' && ! $request->user()->actingAsAdmin(), 404);
 
         return $this->stream($image->image_path);
     }
